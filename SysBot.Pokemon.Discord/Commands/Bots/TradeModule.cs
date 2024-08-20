@@ -12,8 +12,6 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Reflection.Metadata;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using static SysBot.Pokemon.TradeSettings.TradeSettingsCategory;
 
@@ -343,7 +341,7 @@ public class TradeModule<T> : ModuleBase<SocketCommandContext> where T : PKM, ne
         content = TradeModule<T>.ConvertMasterBall(content); // Temp fix for Ball: Master being unrecognized by the bot
 
         // Check if the showdown set contains "Egg"
-        bool isEgg = content.Contains("Egg", StringComparison.OrdinalIgnoreCase);
+        bool isEgg = TradeExtensions<T>.IsEggCheck(content);
 
         var set = new ShowdownSet(content);
         var template = AutoLegalityWrapper.GetTemplate(set);
@@ -551,7 +549,7 @@ public class TradeModule<T> : ModuleBase<SocketCommandContext> where T : PKM, ne
         content = TradeModule<T>.ConvertMasterBall(content); // Temp fix for Ball: Master not being recognized by the bot
 
         // Check if the showdown set contains "Egg"
-        bool isEgg = content.Contains("Egg", StringComparison.OrdinalIgnoreCase);
+        bool isEgg = TradeExtensions<T>.IsEggCheck(content);
 
         var set = new ShowdownSet(content);
         var template = AutoLegalityWrapper.GetTemplate(set);
