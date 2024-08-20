@@ -54,7 +54,7 @@ public static class EmbedHelper
 
         if (isMysteryEgg)
         {
-            thumbnailUrl = "https://raw.githubusercontent.com/bdawg1989/sprites/main/mysteryegg2.png";
+            thumbnailUrl = "https://raw.githubusercontent.com/bdawg1989/sprites/main/mysteryegg3.png";
         }
         else
         {
