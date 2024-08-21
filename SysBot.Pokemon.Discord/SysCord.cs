@@ -1,6 +1,5 @@
 using Discord;
 using Discord.Commands;
-using Discord.Net;
 using Discord.WebSocket;
 using Microsoft.Extensions.DependencyInjection;
 using PKHeX.Core;
@@ -13,6 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using static Discord.GatewayIntents;
 using static SysBot.Pokemon.DiscordSettings;
+using Discord.Net;
 
 namespace SysBot.Pokemon.Discord;
 
@@ -28,13 +28,9 @@ public static class SysCordSettings
 public sealed class SysCord<T> where T : PKM, new()
 {
     public readonly PokeTradeHub<T> Hub;
-
+    private readonly ProgramConfig _config;
     private readonly Dictionary<ulong, ulong> _announcementMessageIds = [];
-
     private readonly DiscordSocketClient _client;
-
-    // Keep the CommandService and DI container around for use with commands.
-    // These two types require you install the Discord.Net.Commands package.
     private readonly CommandService _commands;
 
     private readonly IServiceProvider _services;
@@ -50,11 +46,13 @@ public sealed class SysCord<T> where T : PKM, new()
 
     private readonly DiscordManager Manager;
 
-    public SysCord(PokeBotRunner<T> runner)
+    public SysCord(PokeBotRunner<T> runner, ProgramConfig config)
     {
         Runner = runner;
         Hub = runner.Hub;
         Manager = new DiscordManager(Hub.Config.Discord);
+        _config = config;
+
         foreach (var bot in runner.Hub.Bots.ToArray())
         {
             if (bot is ITradeBot tradeBot)
@@ -75,7 +73,7 @@ public sealed class SysCord<T> where T : PKM, new()
             // If you or another service needs to do anything with messages
             // (ex. checking Reactions, checking the content of edited/deleted messages),
             // you must set the MessageCacheSize. You may adjust the number as needed.
-            MessageCacheSize = 500,
+            //MessageCacheSize = 50,
         });
 
         _commands = new CommandService(new CommandServiceConfig
@@ -169,16 +167,11 @@ public sealed class SysCord<T> where T : PKM, new()
 
     public async Task AnnounceBotStatus(string status, EmbedColorOption color)
     {
-        // Check the BotEmbedStatus setting before proceeding
         if (!SysCordSettings.Settings.BotEmbedStatus)
             return;
 
-        var botName = SysCordSettings.HubConfig.BotName;
-        if (string.IsNullOrEmpty(botName))
-            botName = "SysBot";
-
+        var botName = string.IsNullOrEmpty(SysCordSettings.HubConfig.BotName) ? "SysBot" : SysCordSettings.HubConfig.BotName;
         var fullStatusMessage = $"**Status**: {botName} is {status}!";
-
         var thumbnailUrl = status == "Online"
             ? "https://raw.githubusercontent.com/bdawg1989/sprites/main/botgo.png"
             : "https://raw.githubusercontent.com/bdawg1989/sprites/main/botstop.png";
@@ -191,54 +184,48 @@ public sealed class SysCord<T> where T : PKM, new()
             .WithTimestamp(DateTimeOffset.Now)
             .Build();
 
-        // Iterate over whitelisted channels and send the announcement
         foreach (var channelId in SysCordSettings.Manager.WhitelistedChannels.List.Select(channel => channel.ID))
         {
-            IMessageChannel? channel = _client.GetChannel(channelId) as IMessageChannel;
-            if (channel == null)
-            {
-                // If not found in cache, try fetching directly
-                channel = await _client.Rest.GetChannelAsync(channelId) as IMessageChannel;
-                if (channel == null)
-                {
-                    LogUtil.LogText($"AnnounceBotStatus: Failed to find channel with ID {channelId} even after direct fetch.");
-                    continue;
-                }
-            }
-
             try
             {
-                // Check if there's a previous announcement message in this channel
+                IMessageChannel? channel = _client.GetChannel(channelId) as IMessageChannel;
+                if (channel == null)
+                {
+                    channel = await _client.Rest.GetChannelAsync(channelId) as IMessageChannel;
+                    if (channel == null)
+                    {
+                        LogUtil.LogInfo("SysCord", $"AnnounceBotStatus: Failed to find channel with ID {channelId} even after direct fetch.");
+                        continue;
+                    }
+                }
+
                 if (_announcementMessageIds.TryGetValue(channelId, out ulong messageId))
                 {
-                    // Try to delete the previous announcement message
                     try
                     {
                         await channel.DeleteMessageAsync(messageId);
                     }
-                    catch (Exception ex)
+                    catch
                     {
-                        LogUtil.LogText($"AnnounceBotStatus: Exception when deleting previous message in channel {channelId}: {ex.Message}");
+                        // Ignore exception when deleting previous message
                     }
                 }
 
-                // Send the new announcement and store the message ID
                 var message = await channel.SendMessageAsync(embed: embed);
                 _announcementMessageIds[channelId] = message.Id;
-                LogUtil.LogText($"AnnounceBotStatus: {fullStatusMessage} announced in channel {channelId}.");
+                LogUtil.LogInfo("SysCord", $"AnnounceBotStatus: {fullStatusMessage} announced in channel {channelId}.");
 
-                // Update channel name with emoji based on bot status
-                if (SysCordSettings.Settings.ChannelStatus)
+                if (SysCordSettings.Settings.ChannelStatus && channel is ITextChannel textChannel)
                 {
                     var emoji = status == "Online" ? SysCordSettings.Settings.OnlineEmoji : SysCordSettings.Settings.OfflineEmoji;
-                    var channelName = ((ITextChannel)channel).Name;
-                    var updatedChannelName = $"{emoji}{SysCord<T>.TrimStatusEmoji(channelName)}";
-                    await ((ITextChannel)channel).ModifyAsync(x => x.Name = updatedChannelName);
+                    var updatedChannelName = $"{emoji}{SysCord<T>.TrimStatusEmoji(textChannel.Name)}";
+                    await textChannel.ModifyAsync(x => x.Name = updatedChannelName);
                 }
             }
             catch (Exception ex)
             {
-                LogUtil.LogText($"AnnounceBotStatus: Exception when sending message to channel {channelId}: {ex.Message}");
+                LogUtil.LogInfo("SysCord", $"AnnounceBotStatus: Exception in channel {channelId}: {ex.Message}");
+                // Continue to the next channel despite the exception
             }
         }
     }
@@ -310,7 +297,6 @@ public sealed class SysCord<T> where T : PKM, new()
 
         var app = await _client.GetApplicationInfoAsync().ConfigureAwait(false);
         Manager.Owner = app.Owner.Id;
-
         try
         {
             // Wait infinitely so your bot actually stays connected.
@@ -329,7 +315,6 @@ public sealed class SysCord<T> where T : PKM, new()
             await _client.StopAsync();
         }
     }
-
     // If any services require the client, or the CommandService, or something else you keep on hand,
     // pass them as parameters into this method as needed.
     // If this method is getting pretty long, you can separate it out into another file using partials.
@@ -375,7 +360,7 @@ public sealed class SysCord<T> where T : PKM, new()
     {
         var channel = msg.Channel;
         await channel.TriggerTypingAsync();
-        await Task.Delay(1500);
+        await Task.Delay(500).ConfigureAwait(false);
 
         var responses = new List<string>
         {
@@ -422,59 +407,68 @@ public sealed class SysCord<T> where T : PKM, new()
 
     private async Task HandleMessageAsync(SocketMessage arg)
     {
-        if (arg is not SocketUserMessage msg)
-            return;
-
-        if (msg.Channel is SocketGuildChannel guildChannel)
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        try
         {
-            if (Manager.BlacklistedServers.Contains(guildChannel.Guild.Id))
-            {
-                await guildChannel.Guild.LeaveAsync();
+            if (arg is not SocketUserMessage msg)
                 return;
-            }
-        }
 
-        if (msg.Author.Id == _client.CurrentUser.Id || msg.Author.IsBot)
-            return;
-
-        string thanksText = msg.Content.ToLower();
-        if (SysCordSettings.Settings.ReplyToThanks && (thanksText.Contains("thank") || thanksText.Contains("thx")))
-        {
-            await SysCord<T>.RespondToThanksMessage(msg).ConfigureAwait(false);
-            return;
-        }
-
-        var correctPrefix = SysCordSettings.Settings.CommandPrefix;
-        var content = msg.Content;
-        var argPos = 0;
-
-        if (msg.HasMentionPrefix(_client.CurrentUser, ref argPos) || msg.HasStringPrefix(correctPrefix, ref argPos))
-        {
-            var context = new SocketCommandContext(_client, msg);
-            var handled = await TryHandleCommandAsync(msg, context, argPos);
-            if (handled)
-                return;
-        }
-        else if (content.Length > 1 && content[0] != correctPrefix[0])
-        {
-            var potentialPrefix = content[0].ToString();
-            var command = content.Split(' ')[0][1..];
-
-            if (_validCommands.Contains(command))
+            if (msg.Channel is SocketGuildChannel guildChannel)
             {
-                var response = await msg.Channel.SendMessageAsync($"Incorrect prefix! The correct command is **{correctPrefix}{command}**").ConfigureAwait(false);
-                _ = Task.Delay(5000).ContinueWith(async _ =>
+                if (Manager.BlacklistedServers.Contains(guildChannel.Guild.Id))
                 {
-                    await msg.DeleteAsync().ConfigureAwait(false);
-                    await response.DeleteAsync().ConfigureAwait(false);
-                });
+                    await guildChannel.Guild.LeaveAsync();
+                    return;
+                }
+            }
+
+            if (msg.Author.Id == _client.CurrentUser.Id || msg.Author.IsBot)
+                return;
+
+            string thanksText = msg.Content.ToLower();
+            if (SysCordSettings.Settings.ReplyToThanks && (thanksText.Contains("thank") || thanksText.Contains("thx")))
+            {
+                await SysCord<T>.RespondToThanksMessage(msg).ConfigureAwait(false);
                 return;
             }
-        }
 
-        if (msg.Attachments.Count > 0)
+            var correctPrefix = SysCordSettings.Settings.CommandPrefix;
+            var content = msg.Content;
+            var argPos = 0;
+
+            if (msg.HasMentionPrefix(_client.CurrentUser, ref argPos) || msg.HasStringPrefix(correctPrefix, ref argPos))
+            {
+                var context = new SocketCommandContext(_client, msg);
+                var handled = await TryHandleCommandAsync(msg, context, argPos);
+                if (handled)
+                    return;
+            }
+            else if (content.Length > 1 && content[0] != correctPrefix[0])
+            {
+                var potentialPrefix = content[0].ToString();
+                var command = content.Split(' ')[0][1..];
+                if (_validCommands.Contains(command))
+                {
+                    await msg.Channel.SendMessageAsync($"Incorrect prefix! The correct command is **{correctPrefix}{command}**").ConfigureAwait(false);
+                    return;
+                }
+            }
+
+            if (msg.Attachments.Count > 0)
+            {
+                await TryHandleAttachmentAsync(msg).ConfigureAwait(false);
+            }
+        }
+        finally
         {
-            await TryHandleAttachmentAsync(msg).ConfigureAwait(false);
+            stopwatch.Stop();
+            if (stopwatch.ElapsedMilliseconds > 1000) // Log if processing takes more than 1 second
+            {
+                await Log(new LogMessage(LogSeverity.Warning, "Gateway",
+                    $"A MessageReceived handler is blocking the gateway task. " +
+                    $"Method: HandleMessageAsync, Execution Time: {stopwatch.ElapsedMilliseconds}ms, " +
+                    $"Message Content: {arg.Content.Substring(0, Math.Min(arg.Content.Length, 100))}...")).ConfigureAwait(false);
+            }
         }
     }
 
@@ -541,6 +535,7 @@ public sealed class SysCord<T> where T : PKM, new()
             await Task.Delay(gap, token).ConfigureAwait(false);
         }
     }
+
 
     private async Task TryHandleAttachmentAsync(SocketMessage msg)
     {
