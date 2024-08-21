@@ -449,7 +449,7 @@ public sealed class SysCord<T> where T : PKM, new()
                 var command = content.Split(' ')[0][1..];
                 if (_validCommands.Contains(command))
                 {
-                    await msg.Channel.SendMessageAsync($"Incorrect prefix! The correct command is **{correctPrefix}{command}**").ConfigureAwait(false);
+                    await SafeSendMessageAsync(msg.Channel, $"Incorrect prefix! The correct command is **{correctPrefix}{command}**").ConfigureAwait(false);
                     return;
                 }
             }
@@ -459,6 +459,14 @@ public sealed class SysCord<T> where T : PKM, new()
                 await TryHandleAttachmentAsync(msg).ConfigureAwait(false);
             }
         }
+        catch (HttpException ex) when (ex.DiscordCode == DiscordErrorCode.InsufficientPermissions) // Missing Permissions
+        {
+            await Log(new LogMessage(LogSeverity.Warning, "Command", $"Missing permissions to handle a message in channel {arg.Channel.Name}")).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await Log(new LogMessage(LogSeverity.Error, "Command", $"Unhandled exception in HandleMessageAsync: {ex.Message}", ex)).ConfigureAwait(false);
+        }
         finally
         {
             stopwatch.Stop();
@@ -467,7 +475,7 @@ public sealed class SysCord<T> where T : PKM, new()
                 await Log(new LogMessage(LogSeverity.Warning, "Gateway",
                     $"A MessageReceived handler is blocking the gateway task. " +
                     $"Method: HandleMessageAsync, Execution Time: {stopwatch.ElapsedMilliseconds}ms, " +
-                    $"Message Content: {arg.Content.Substring(0, Math.Min(arg.Content.Length, 100))}...")).ConfigureAwait(false);
+                    $"Message Content: {arg.Content[..Math.Min(arg.Content.Length, 100)]}...")).ConfigureAwait(false);
             }
         }
     }

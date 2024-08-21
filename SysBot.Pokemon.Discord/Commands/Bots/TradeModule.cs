@@ -277,37 +277,42 @@ public class TradeModule<T> : ModuleBase<SocketCommandContext> where T : PKM, ne
         content = ReusableActions.StripCodeBlock(content);
         var set = new ShowdownSet(content);
         var template = AutoLegalityWrapper.GetTemplate(set);
-
-        try
+        _ = Task.Run(async () =>
         {
-            var sav = AutoLegalityWrapper.GetTrainerInfo<T>();
-            var pkm = sav.GetLegal(template, out var result);
-            pkm = EntityConverter.ConvertToType(pkm, typeof(T), out _) ?? pkm;
-
-            if (pkm is not T pk)
+            try
             {
-                _ = ReplyAndDeleteAsync("Oops! I wasn't able to create an egg for that.", 2, Context.Message);
-                return;
+                var sav = AutoLegalityWrapper.GetTrainerInfo<T>();
+                var pkm = sav.GetLegal(template, out var result);
+                pkm = EntityConverter.ConvertToType(pkm, typeof(T), out _) ?? pkm;
+
+                if (pkm is not T pk)
+                {
+                    _ = ReplyAndDeleteAsync("Oops! I wasn't able to create an egg for that.", 2, Context.Message);
+                    return;
+                }
+
+                // Use the EggTrade method without setting the nickname
+                pk.IsNicknamed = false; // Make sure we don't set a nickname
+                TradeExtensions<T>.EggTrade(pk, template);
+
+                var sig = Context.User.GetFavor();
+                await AddTradeToQueueAsync(code, Context.User.Username, pk, sig, Context.User).ConfigureAwait(false);
+
+                _ = DeleteMessagesAfterDelayAsync(null, Context.Message, 2);
             }
+            catch (Exception ex)
+            {
+                LogUtil.LogSafe(ex, nameof(TradeModule<T>));
+                _ = ReplyAndDeleteAsync("An error occurred while processing the request.", 2, Context.Message);
+            }
+            if (Context.Message is IUserMessage userMessage)
+            {
+                _ = DeleteMessagesAfterDelayAsync(userMessage, null, 2);
+            }
+        });
 
-            // Use the EggTrade method without setting the nickname
-            pk.IsNicknamed = false; // Make sure we don't set a nickname
-            TradeExtensions<T>.EggTrade(pk, template);
-
-            var sig = Context.User.GetFavor();
-            await AddTradeToQueueAsync(code, Context.User.Username, pk, sig, Context.User).ConfigureAwait(false);
-
-            _ = DeleteMessagesAfterDelayAsync(null, Context.Message, 2);
-        }
-        catch (Exception ex)
-        {
-            LogUtil.LogSafe(ex, nameof(TradeModule<T>));
-            _ = ReplyAndDeleteAsync("An error occurred while processing the request.", 2, Context.Message);
-        }
-        if (Context.Message is IUserMessage userMessage)
-        {
-            _ = DeleteMessagesAfterDelayAsync(userMessage, null, 2);
-        }
+        // Return immediately to avoid blocking
+        await Task.CompletedTask;
     }
 
     [Command("hidetrade")]
@@ -352,141 +357,146 @@ public class TradeModule<T> : ModuleBase<SocketCommandContext> where T : PKM, ne
             _ = ReplyAndDeleteAsync(msg, 2, Context.Message);
             return;
         }
-
-        try
+        _ = Task.Run(async () =>
         {
-            var sav = AutoLegalityWrapper.GetTrainerInfo<T>();
-            var pkm = sav.GetLegal(template, out var result);
-            var la = new LegalityAnalysis(pkm);
-            var spec = GameInfo.Strings.Species[template.Species];
+            try
+            {
+                var sav = AutoLegalityWrapper.GetTrainerInfo<T>();
+                var pkm = sav.GetLegal(template, out var result);
+                var la = new LegalityAnalysis(pkm);
+                var spec = GameInfo.Strings.Species[template.Species];
 
-            if (isEgg && pkm is T eggPk)
-            {
-                eggPk.IsNicknamed = false; // Make sure we don't set a nickname
-                TradeExtensions<T>.EggTrade(eggPk, template);
-                pkm = eggPk; // Update the pkm reference
-                la = new LegalityAnalysis(pkm); // Re-analyze legality
-            }
-            else
-            {
-                if (SysCord<T>.Runner.Config.Trade.TradeConfiguration.SuggestRelearnMoves)
+                if (isEgg && pkm is T eggPk)
                 {
-                    switch (pkm)
+                    eggPk.IsNicknamed = false; // Make sure we don't set a nickname
+                    TradeExtensions<T>.EggTrade(eggPk, template);
+                    pkm = eggPk; // Update the pkm reference
+                    la = new LegalityAnalysis(pkm); // Re-analyze legality
+                }
+                else
+                {
+                    if (SysCord<T>.Runner.Config.Trade.TradeConfiguration.SuggestRelearnMoves)
                     {
-                        case PK9 pk9:
-                            pk9.SetRecordFlagsAll();
-                            break;
+                        switch (pkm)
+                        {
+                            case PK9 pk9:
+                                pk9.SetRecordFlagsAll();
+                                break;
 
-                        case PK8 pk8:
-                            pk8.SetRecordFlagsAll();
-                            break;
+                            case PK8 pk8:
+                                pk8.SetRecordFlagsAll();
+                                break;
 
-                        case PB8 pb8:
-                            pb8.SetRecordFlagsAll();
-                            break;
+                            case PB8 pb8:
+                                pb8.SetRecordFlagsAll();
+                                break;
 
-                        case PB7 pb7:
-                        case PA8 pa8:
-                            break;
+                            case PB7 pb7:
+                            case PA8 pa8:
+                                break;
+                        }
+                    }
+
+                    pkm.HeldItem = pkm switch
+                    {
+                        PA8 => (int)HeldItem.None,
+                        _ when pkm.HeldItem == 0 && !pkm.IsEgg => (int)SysCord<T>.Runner.Config.Trade.TradeConfiguration.DefaultHeldItem,
+                        _ => pkm.HeldItem
+                    };
+
+                    if (pkm is PB7)
+                    {
+                        lgcode = TradeModule<T>.GenerateRandomPictocodes(3);
+                        if (pkm.Species == (int)Species.Mew && pkm.IsShiny)
+                        {
+                            await ReplyAsync("Mew can **not** be Shiny in LGPE. PoGo Mew does not transfer and Pokeball Plus Mew is shiny locked.");
+                            return;
+                        }
                     }
                 }
-
-                pkm.HeldItem = pkm switch
+                bool setEdited = false;
+                if (pkm is not T pk || !la.Valid || !string.IsNullOrEmpty(set.Form.ToString()))
                 {
-                    PA8 => (int)HeldItem.None,
-                    _ when pkm.HeldItem == 0 && !pkm.IsEgg => (int)SysCord<T>.Runner.Config.Trade.TradeConfiguration.DefaultHeldItem,
-                    _ => pkm.HeldItem
-                };
-
-                if (pkm is PB7)
-                {
-                    lgcode = TradeModule<T>.GenerateRandomPictocodes(3);
-                    if (pkm.Species == (int)Species.Mew && pkm.IsShiny)
+                    // Perform auto correct if it's on and send that shit through again
+                    if (SysCord<T>.Runner.Config.Trade.AutoCorrectConfig.EnableAutoCorrect && !la.Valid)
                     {
-                        await ReplyAsync("Mew can **not** be Shiny in LGPE. PoGo Mew does not transfer and Pokeball Plus Mew is shiny locked.");
+                        var (finalShowdownSet, correctionMessages) = await AutoCorrectShowdown<T>.PerformAutoCorrect(content, pkm, la);
+                        set = new ShowdownSet(finalShowdownSet);
+                        template = AutoLegalityWrapper.GetTemplate(set);
+                        pkm = sav.GetLegal(template, out result);
+                        la = new LegalityAnalysis(pkm);
+                        setEdited = true;
+                        if (correctionMessages.Count > 0 && la.Valid)
+                        {
+                            var userName = Context.User.Mention;
+                            var changesEmbed = new EmbedBuilder()
+                                .WithTitle("Showdown Set Corrections")
+                                .WithColor(Color.Orange)
+                                .WithThumbnailUrl("https://raw.githubusercontent.com/bdawg1989/sprites/main/profoak.png")
+                                .WithDescription(string.Join("\n", correctionMessages))
+                                .AddField("Corrected Showdown Set:", $"```{finalShowdownSet}```")
+                                .Build();
+                            var correctionMessage = await ReplyAsync($"{userName}, here are the corrections we made to your Showdown set:", embed: changesEmbed).ConfigureAwait(false);
+                            _ = DeleteMessagesAfterDelayAsync(correctionMessage, Context.Message, 30);
+                        }
+                    }
+
+                    if (pkm is not T correctedPk || !la.Valid)
+                    {
+                        var reason = result == "Timeout" ? $"That {spec} set took too long to generate." :
+                                     result == "VersionMismatch" ? "Request refused: PKHeX and Auto-Legality Mod version mismatch." :
+                                     $"I wasn't able to create a {spec} from that set.";
+
+                        var embedBuilder = new EmbedBuilder()
+                            .WithTitle("Trade Creation Failed.")
+                            .WithColor(Color.Red)
+                            .AddField("Status", $"Failed to create {spec}.")
+                            .AddField("Reason", reason);
+
+                        if (result == "Failed")
+                        {
+                            var legalizationHint = AutoLegalityWrapper.GetLegalizationHint(template, sav, pkm);
+                            if (legalizationHint.Contains("Requested shiny value (ShinyType."))
+                            {
+                                legalizationHint = $"{spec} **cannot** be shiny. Please try again.";
+                            }
+
+                            if (!string.IsNullOrEmpty(legalizationHint))
+                            {
+                                embedBuilder.AddField("Hint", legalizationHint);
+                            }
+                        }
+
+                        string userMention = Context.User.Mention;
+                        string messageContent = $"{userMention}, here's the report for your request:";
+                        var message = await Context.Channel.SendMessageAsync(text: messageContent, embed: embedBuilder.Build()).ConfigureAwait(false);
+                        _ = DeleteMessagesAfterDelayAsync(message, Context.Message, 30);
                         return;
                     }
+                    pk = correctedPk;
                 }
+                if (pk.WasEgg)
+                    pk.EggMetDate = pk.MetDate;
+                pk.ResetPartyStats();
+
+                var sig = Context.User.GetFavor();
+                await AddTradeToQueueAsync(code, Context.User.Username, pk, sig, Context.User, isBatchTrade: false, batchTradeNumber: 1, totalBatchTrades: 1, true, false, lgcode: lgcode, ignoreAutoOT: ignoreAutoOT, setEdited: setEdited).ConfigureAwait(false);
             }
-            bool setEdited = false;
-            if (pkm is not T pk || !la.Valid || !string.IsNullOrEmpty(set.Form.ToString()))
+            catch (Exception ex)
             {
-                // Perform auto correct if it's on and send that shit through again
-                if (SysCord<T>.Runner.Config.Trade.AutoCorrectConfig.EnableAutoCorrect && !la.Valid)
-                {
-                    var (finalShowdownSet, correctionMessages) = await AutoCorrectShowdown<T>.PerformAutoCorrect(content, pkm, la);
-                    set = new ShowdownSet(finalShowdownSet);
-                    template = AutoLegalityWrapper.GetTemplate(set);
-                    pkm = sav.GetLegal(template, out result);
-                    la = new LegalityAnalysis(pkm);
-                    setEdited = true;
-                    if (correctionMessages.Count > 0 && la.Valid)
-                    {
-                        var userName = Context.User.Mention;
-                        var changesEmbed = new EmbedBuilder()
-                            .WithTitle("Showdown Set Corrections")
-                            .WithColor(Color.Orange)
-                            .WithThumbnailUrl("https://raw.githubusercontent.com/bdawg1989/sprites/main/profoak.png")
-                            .WithDescription(string.Join("\n", correctionMessages))
-                            .AddField("Corrected Showdown Set:", $"```{finalShowdownSet}```")
-                            .Build();
-                        var correctionMessage = await ReplyAsync($"{userName}, here are the corrections we made to your Showdown set:", embed: changesEmbed).ConfigureAwait(false);
-                        _ = DeleteMessagesAfterDelayAsync(correctionMessage, Context.Message, 30);
-                    }
-                }
+                LogUtil.LogSafe(ex, nameof(TradeModule<T>));
+                var msg = $"Oops! An unexpected problem happened with this Showdown Set:\n```{string.Join("\n", set.GetSetLines())}```";
 
-                if (pkm is not T correctedPk || !la.Valid)
-                {
-                    var reason = result == "Timeout" ? $"That {spec} set took too long to generate." :
-                                 result == "VersionMismatch" ? "Request refused: PKHeX and Auto-Legality Mod version mismatch." :
-                                 $"I wasn't able to create a {spec} from that set.";
-
-                    var embedBuilder = new EmbedBuilder()
-                        .WithTitle("Trade Creation Failed.")
-                        .WithColor(Color.Red)
-                        .AddField("Status", $"Failed to create {spec}.")
-                        .AddField("Reason", reason);
-
-                    if (result == "Failed")
-                    {
-                        var legalizationHint = AutoLegalityWrapper.GetLegalizationHint(template, sav, pkm);
-                        if (legalizationHint.Contains("Requested shiny value (ShinyType."))
-                        {
-                            legalizationHint = $"{spec} **cannot** be shiny. Please try again.";
-                        }
-
-                        if (!string.IsNullOrEmpty(legalizationHint))
-                        {
-                            embedBuilder.AddField("Hint", legalizationHint);
-                        }
-                    }
-
-                    string userMention = Context.User.Mention;
-                    string messageContent = $"{userMention}, here's the report for your request:";
-                    var message = await Context.Channel.SendMessageAsync(text: messageContent, embed: embedBuilder.Build()).ConfigureAwait(false);
-                    _ = DeleteMessagesAfterDelayAsync(message, Context.Message, 30);
-                    return;
-                }
-                pk = correctedPk;
+                _ = ReplyAndDeleteAsync(msg, 2, Context.Message);
             }
-            if (pk.WasEgg)
-                pk.EggMetDate = pk.MetDate;
-            pk.ResetPartyStats();
+            if (Context.Message is IUserMessage userMessage)
+            {
+                _ = DeleteMessagesAfterDelayAsync(userMessage, null, 0);
+            }
+        });
 
-            var sig = Context.User.GetFavor();
-            await AddTradeToQueueAsync(code, Context.User.Username, pk, sig, Context.User, isBatchTrade: false, batchTradeNumber: 1, totalBatchTrades: 1, true, false, lgcode: lgcode, ignoreAutoOT: ignoreAutoOT, setEdited: setEdited).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            LogUtil.LogSafe(ex, nameof(TradeModule<T>));
-            var msg = $"Oops! An unexpected problem happened with this Showdown Set:\n```{string.Join("\n", set.GetSetLines())}```";
-
-            _ = ReplyAndDeleteAsync(msg, 2, Context.Message);
-        }
-        if (Context.Message is IUserMessage userMessage)
-        {
-            _ = DeleteMessagesAfterDelayAsync(userMessage, null, 0);
-        }
+        // Return immediately to avoid blocking
+        await Task.CompletedTask;
     }
 
     [Command("hidetrade")]
@@ -494,8 +504,8 @@ public class TradeModule<T> : ModuleBase<SocketCommandContext> where T : PKM, ne
     [Summary("Makes the bot trade you the provided Pokémon file without showing the trade embed details.")]
     [RequireQueueRole(nameof(DiscordManager.RolesTrade))]
     public Task HideTradeAsyncAttach(
-        [Summary("Trade Code")] int code,
-        [Summary("Ignore AutoOT")] bool ignoreAutoOT = false)
+            [Summary("Trade Code")] int code,
+            [Summary("Ignore AutoOT")] bool ignoreAutoOT = false)
     {
         var sig = Context.User.GetFavor();
         return HideTradeAsyncAttach(code, sig, Context.User, ignoreAutoOT: ignoreAutoOT);
@@ -560,140 +570,145 @@ public class TradeModule<T> : ModuleBase<SocketCommandContext> where T : PKM, ne
             _ = ReplyAndDeleteAsync(msg, 2, Context.Message);
             return;
         }
-
-        try
+        _ = Task.Run(async () =>
         {
-            var sav = AutoLegalityWrapper.GetTrainerInfo<T>();
-            var pkm = sav.GetLegal(template, out var result);
-            var la = new LegalityAnalysis(pkm);
-            var spec = GameInfo.Strings.Species[template.Species];
+            try
+            {
+                var sav = AutoLegalityWrapper.GetTrainerInfo<T>();
+                var pkm = sav.GetLegal(template, out var result);
+                var la = new LegalityAnalysis(pkm);
+                var spec = GameInfo.Strings.Species[template.Species];
 
-            if (isEgg && pkm is T eggPk)
-            {
-                eggPk.IsNicknamed = false; // Make sure we don't set a nickname
-                TradeExtensions<T>.EggTrade(eggPk, template);
-                pkm = eggPk; // Update the pkm reference
-                la = new LegalityAnalysis(pkm); // Re-analyze legality
-            }
-            else
-            {
-                if (SysCord<T>.Runner.Config.Trade.TradeConfiguration.SuggestRelearnMoves)
+                if (isEgg && pkm is T eggPk)
                 {
-                    switch (pkm)
+                    eggPk.IsNicknamed = false; // Make sure we don't set a nickname
+                    TradeExtensions<T>.EggTrade(eggPk, template);
+                    pkm = eggPk; // Update the pkm reference
+                    la = new LegalityAnalysis(pkm); // Re-analyze legality
+                }
+                else
+                {
+                    if (SysCord<T>.Runner.Config.Trade.TradeConfiguration.SuggestRelearnMoves)
                     {
-                        case PK9 pk9:
-                            pk9.SetRecordFlagsAll();
-                            break;
-                        case PK8 pk8:
-                            pk8.SetRecordFlagsAll();
-                            break;
-                        case PB8 pb8:
-                            pb8.SetRecordFlagsAll();
-                            break;
-                        case PB7 pb7:
-                        case PA8 pa8:
-                            break;
+                        switch (pkm)
+                        {
+                            case PK9 pk9:
+                                pk9.SetRecordFlagsAll();
+                                break;
+                            case PK8 pk8:
+                                pk8.SetRecordFlagsAll();
+                                break;
+                            case PB8 pb8:
+                                pb8.SetRecordFlagsAll();
+                                break;
+                            case PB7 pb7:
+                            case PA8 pa8:
+                                break;
+                        }
+                    }
+
+                    pkm.HeldItem = pkm switch
+                    {
+                        PA8 => (int)HeldItem.None,
+                        _ when pkm.HeldItem == 0 && !pkm.IsEgg => (int)SysCord<T>.Runner.Config.Trade.TradeConfiguration.DefaultHeldItem,
+                        _ => pkm.HeldItem
+                    };
+
+                    if (pkm is PB7)
+                    {
+                        lgcode = TradeModule<T>.GenerateRandomPictocodes(3);
+                        if (pkm.Species == (int)Species.Mew && pkm.IsShiny)
+                        {
+                            await ReplyAsync("Mew can **not** be Shiny in LGPE. PoGo Mew does not transfer and Pokeball Plus Mew is shiny locked.");
+                            return;
+                        }
                     }
                 }
 
-                pkm.HeldItem = pkm switch
+                bool setEdited = false;
+                if (pkm is not T pk || !la.Valid || !string.IsNullOrEmpty(set.Form.ToString()))
                 {
-                    PA8 => (int)HeldItem.None,
-                    _ when pkm.HeldItem == 0 && !pkm.IsEgg => (int)SysCord<T>.Runner.Config.Trade.TradeConfiguration.DefaultHeldItem,
-                    _ => pkm.HeldItem
-                };
-
-                if (pkm is PB7)
-                {
-                    lgcode = TradeModule<T>.GenerateRandomPictocodes(3);
-                    if (pkm.Species == (int)Species.Mew && pkm.IsShiny)
+                    // Perform auto correct if it's on and send that shit through again
+                    if (SysCord<T>.Runner.Config.Trade.AutoCorrectConfig.EnableAutoCorrect && !la.Valid)
                     {
-                        await ReplyAsync("Mew can **not** be Shiny in LGPE. PoGo Mew does not transfer and Pokeball Plus Mew is shiny locked.");
+                        var (finalShowdownSet, correctionMessages) = await AutoCorrectShowdown<T>.PerformAutoCorrect(content, pkm, la);
+                        set = new ShowdownSet(finalShowdownSet);
+                        template = AutoLegalityWrapper.GetTemplate(set);
+                        pkm = sav.GetLegal(template, out result);
+                        la = new LegalityAnalysis(pkm);
+                        setEdited = true;
+                        if (correctionMessages.Count > 0 && la.Valid)
+                        {
+                            var userName = Context.User.Mention;
+                            var changesEmbed = new EmbedBuilder()
+                                .WithTitle("Showdown Set Corrections")
+                                .WithColor(Color.Orange)
+                                .WithThumbnailUrl("https://raw.githubusercontent.com/bdawg1989/sprites/main/profoak.png")
+                                .WithDescription(string.Join("\n", correctionMessages))
+                                .AddField("Corrected Showdown Set:", $"```{finalShowdownSet}```")
+                                .Build();
+                            var correctionMessage = await ReplyAsync($"{userName}, here are the corrections we made to your Showdown set:", embed: changesEmbed).ConfigureAwait(false);
+                            _ = DeleteMessagesAfterDelayAsync(correctionMessage, Context.Message, 30);
+                        }
+                    }
+
+                    if (pkm is not T correctedPk || !la.Valid)
+                    {
+                        var reason = result == "Timeout" ? $"That {spec} set took too long to generate." :
+                                     result == "VersionMismatch" ? "Request refused: PKHeX and Auto-Legality Mod version mismatch." :
+                                     $"I wasn't able to create a {spec} from that set.";
+
+                        var embedBuilder = new EmbedBuilder()
+                            .WithTitle("Trade Creation Failed.")
+                            .WithColor(Color.Red)
+                            .AddField("Status", $"Failed to create {spec}.")
+                            .AddField("Reason", reason);
+
+                        if (result == "Failed")
+                        {
+                            var legalizationHint = AutoLegalityWrapper.GetLegalizationHint(template, sav, pkm);
+                            if (legalizationHint.Contains("Requested shiny value (ShinyType."))
+                            {
+                                legalizationHint = $"{spec} **cannot** be shiny. Please try again.";
+                            }
+
+                            if (!string.IsNullOrEmpty(legalizationHint))
+                            {
+                                embedBuilder.AddField("Hint", legalizationHint);
+                            }
+                        }
+
+                        string userMention = Context.User.Mention;
+                        string messageContent = $"{userMention}, here's the report for your request:";
+                        var message = await Context.Channel.SendMessageAsync(text: messageContent, embed: embedBuilder.Build()).ConfigureAwait(false);
+                        _ = DeleteMessagesAfterDelayAsync(message, Context.Message, 30);
                         return;
                     }
+                    pk = correctedPk;
                 }
-            }
 
-            bool setEdited = false;
-            if (pkm is not T pk || !la.Valid || !string.IsNullOrEmpty(set.Form.ToString()))
+                if (pk.WasEgg)
+                    pk.EggMetDate = pk.MetDate;
+                pk.ResetPartyStats();
+
+                var sig = Context.User.GetFavor();
+                await AddTradeToQueueAsync(code, Context.User.Username, pk, sig, Context.User, isBatchTrade: false, batchTradeNumber: 1, totalBatchTrades: 1, lgcode: lgcode, ignoreAutoOT: ignoreAutoOT, setEdited: setEdited).ConfigureAwait(false);
+            }
+            catch (Exception ex)
             {
-                // Perform auto correct if it's on and send that shit through again
-                if (SysCord<T>.Runner.Config.Trade.AutoCorrectConfig.EnableAutoCorrect && !la.Valid)
-                {
-                    var (finalShowdownSet, correctionMessages) = await AutoCorrectShowdown<T>.PerformAutoCorrect(content, pkm, la);
-                    set = new ShowdownSet(finalShowdownSet);
-                    template = AutoLegalityWrapper.GetTemplate(set);
-                    pkm = sav.GetLegal(template, out result);
-                    la = new LegalityAnalysis(pkm);
-                    setEdited = true;
-                    if (correctionMessages.Count > 0 && la.Valid)
-                    {
-                        var userName = Context.User.Mention;
-                        var changesEmbed = new EmbedBuilder()
-                            .WithTitle("Showdown Set Corrections")
-                            .WithColor(Color.Orange)
-                            .WithThumbnailUrl("https://raw.githubusercontent.com/bdawg1989/sprites/main/profoak.png")
-                            .WithDescription(string.Join("\n", correctionMessages))
-                            .AddField("Corrected Showdown Set:", $"```{finalShowdownSet}```")
-                            .Build();
-                        var correctionMessage = await ReplyAsync($"{userName}, here are the corrections we made to your Showdown set:", embed: changesEmbed).ConfigureAwait(false);
-                        _ = DeleteMessagesAfterDelayAsync(correctionMessage, Context.Message, 30);
-                    }
-                }
+                LogUtil.LogSafe(ex, nameof(TradeModule<T>));
+                var msg = $"Oops! An unexpected problem happened with this Showdown Set:\n```{string.Join("\n", set.GetSetLines())}```";
 
-                if (pkm is not T correctedPk || !la.Valid)
-                {
-                    var reason = result == "Timeout" ? $"That {spec} set took too long to generate." :
-                                 result == "VersionMismatch" ? "Request refused: PKHeX and Auto-Legality Mod version mismatch." :
-                                 $"I wasn't able to create a {spec} from that set.";
-
-                    var embedBuilder = new EmbedBuilder()
-                        .WithTitle("Trade Creation Failed.")
-                        .WithColor(Color.Red)
-                        .AddField("Status", $"Failed to create {spec}.")
-                        .AddField("Reason", reason);
-
-                    if (result == "Failed")
-                    {
-                        var legalizationHint = AutoLegalityWrapper.GetLegalizationHint(template, sav, pkm);
-                        if (legalizationHint.Contains("Requested shiny value (ShinyType."))
-                        {
-                            legalizationHint = $"{spec} **cannot** be shiny. Please try again.";
-                        }
-
-                        if (!string.IsNullOrEmpty(legalizationHint))
-                        {
-                            embedBuilder.AddField("Hint", legalizationHint);
-                        }
-                    }
-
-                    string userMention = Context.User.Mention;
-                    string messageContent = $"{userMention}, here's the report for your request:";
-                    var message = await Context.Channel.SendMessageAsync(text: messageContent, embed: embedBuilder.Build()).ConfigureAwait(false);
-                    _ = DeleteMessagesAfterDelayAsync(message, Context.Message, 30);
-                    return;
-                }
-                pk = correctedPk;
+                _ = ReplyAndDeleteAsync(msg, 2, null);
             }
+            if (Context.Message is IUserMessage userMessage)
+            {
+                _ = DeleteMessagesAfterDelayAsync(userMessage, null, 2);
+            }
+        });
 
-            if (pk.WasEgg)
-                pk.EggMetDate = pk.MetDate;
-            pk.ResetPartyStats();
-
-            var sig = Context.User.GetFavor();
-            await AddTradeToQueueAsync(code, Context.User.Username, pk, sig, Context.User, isBatchTrade: false, batchTradeNumber: 1, totalBatchTrades: 1, lgcode: lgcode, ignoreAutoOT: ignoreAutoOT, setEdited: setEdited).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            LogUtil.LogSafe(ex, nameof(TradeModule<T>));
-            var msg = $"Oops! An unexpected problem happened with this Showdown Set:\n```{string.Join("\n", set.GetSetLines())}```";
-
-            _ = ReplyAndDeleteAsync(msg, 2, null);
-        }
-        if (Context.Message is IUserMessage userMessage)
-        {
-            _ = DeleteMessagesAfterDelayAsync(userMessage, null, 2);
-        }
+        // Return immediately to avoid blocking
+        await Task.CompletedTask;
     }
 
     [Command("trade")]
@@ -864,31 +879,37 @@ public class TradeModule<T> : ModuleBase<SocketCommandContext> where T : PKM, ne
 
     private async Task ProcessSingleTradeAsync(T pk, int batchTradeCode, bool isBatchTrade, int batchTradeNumber, int totalBatchTrades)
     {
-        try
+        _ = Task.Run(async () =>
         {
-            var la = new LegalityAnalysis(pk);
-            var spec = GameInfo.Strings.Species[pk.Species];
-
-            if (!la.Valid)
+            try
             {
-                await ReplyAsync($"The {spec} in the provided file is not legal.").ConfigureAwait(false);
-                return;
+                var la = new LegalityAnalysis(pk);
+                var spec = GameInfo.Strings.Species[pk.Species];
+
+                if (!la.Valid)
+                {
+                    await ReplyAsync($"The {spec} in the provided file is not legal.").ConfigureAwait(false);
+                    return;
+                }
+
+                pk.ResetPartyStats();
+
+                var userID = Context.User.Id;
+                var code = Info.GetRandomTradeCode(userID);
+                var lgcode = Info.GetRandomLGTradeCode();
+
+                // Add the trade to the queue
+                var sig = Context.User.GetFavor();
+                await AddTradeToQueueAsync(batchTradeCode, Context.User.Username, pk, sig, Context.User, isBatchTrade, batchTradeNumber, totalBatchTrades, lgcode: lgcode, tradeType: PokeTradeType.Batch).ConfigureAwait(false);
             }
+            catch (Exception ex)
+            {
+                LogUtil.LogSafe(ex, nameof(TradeModule<T>));
+            }
+        });
 
-            pk.ResetPartyStats();
-
-            var userID = Context.User.Id;
-            var code = Info.GetRandomTradeCode(userID);
-            var lgcode = Info.GetRandomLGTradeCode();
-
-            // Add the trade to the queue
-            var sig = Context.User.GetFavor();
-            await AddTradeToQueueAsync(batchTradeCode, Context.User.Username, pk, sig, Context.User, isBatchTrade, batchTradeNumber, totalBatchTrades, lgcode: lgcode, tradeType: PokeTradeType.Batch).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            LogUtil.LogSafe(ex, nameof(TradeModule<T>));
-        }
+        // Return immediately to avoid blocking
+        await Task.CompletedTask;
     }
 
     private async Task ProcessSingleTradeAsync(string tradeContent, int batchTradeCode, bool isBatchTrade, int batchTradeNumber, int totalBatchTrades)
@@ -904,138 +925,143 @@ public class TradeModule<T> : ModuleBase<SocketCommandContext> where T : PKM, ne
             await ReplyAsync(msg).ConfigureAwait(false);
             return;
         }
-
-        try
+        _ = Task.Run(async () =>
         {
-            var sav = AutoLegalityWrapper.GetTrainerInfo<T>();
-            var pkm = sav.GetLegal(template, out var result);
-            var la = new LegalityAnalysis(pkm);
-            var spec = GameInfo.Strings.Species[template.Species];
-            bool setEdited = false;
-            if (pkm is not T pk || !la.Valid || !string.IsNullOrEmpty(set.Form.ToString()))
+            try
             {
-                // Perform auto correct if it's on and send that shit through again
-                if (SysCord<T>.Runner.Config.Trade.AutoCorrectConfig.EnableAutoCorrect && !la.Valid)
+                var sav = AutoLegalityWrapper.GetTrainerInfo<T>();
+                var pkm = sav.GetLegal(template, out var result);
+                var la = new LegalityAnalysis(pkm);
+                var spec = GameInfo.Strings.Species[template.Species];
+                bool setEdited = false;
+                if (pkm is not T pk || !la.Valid || !string.IsNullOrEmpty(set.Form.ToString()))
                 {
-                    var (finalShowdownSet, correctionMessages) = await AutoCorrectShowdown<T>.PerformAutoCorrect(tradeContent, pkm, la);
-                    set = new ShowdownSet(finalShowdownSet);
-                    template = AutoLegalityWrapper.GetTemplate(set);
-                    pkm = sav.GetLegal(template, out result);
-                    la = new LegalityAnalysis(pkm);
-                    setEdited = true;
-                    if (correctionMessages.Count > 0 && la.Valid)
+                    // Perform auto correct if it's on and send that shit through again
+                    if (SysCord<T>.Runner.Config.Trade.AutoCorrectConfig.EnableAutoCorrect && !la.Valid)
                     {
-                        var userName = Context.User.Mention;
-                        var changesEmbed = new EmbedBuilder()
-                            .WithTitle("Showdown Set Corrections")
-                            .WithColor(Color.Orange)
-                            .WithThumbnailUrl("https://raw.githubusercontent.com/bdawg1989/sprites/main/profoak.png")
-                            .WithDescription(string.Join("\n", correctionMessages))
-                            .AddField("Corrected Showdown Set:", $"```{finalShowdownSet}```")
-                            .Build();
-                        var correctionMessage = await ReplyAsync($"{userName}, here are the corrections we made to your Showdown set:", embed: changesEmbed).ConfigureAwait(false);
-                        _ = DeleteMessagesAfterDelayAsync(correctionMessage, Context.Message, 30);
-                    }
-                }
-
-                if (pkm is not T correctedPk || !la.Valid)
-                {
-                    var reason = result == "Timeout" ? $"That {spec} set took too long to generate." :
-                                 result == "VersionMismatch" ? "Request refused: PKHeX and Auto-Legality Mod version mismatch." :
-                                 $"I wasn't able to create a {spec} from that set.";
-
-                    var embedBuilder = new EmbedBuilder()
-                        .WithTitle("Trade Creation Failed.")
-                        .WithColor(Color.Red)
-                        .AddField("Status", $"Failed to create {spec}.")
-                        .AddField("Reason", reason);
-
-                    if (result == "Failed")
-                    {
-                        var legalizationHint = AutoLegalityWrapper.GetLegalizationHint(template, sav, pkm);
-                        if (legalizationHint.Contains("Requested shiny value (ShinyType."))
+                        var (finalShowdownSet, correctionMessages) = await AutoCorrectShowdown<T>.PerformAutoCorrect(tradeContent, pkm, la);
+                        set = new ShowdownSet(finalShowdownSet);
+                        template = AutoLegalityWrapper.GetTemplate(set);
+                        pkm = sav.GetLegal(template, out result);
+                        la = new LegalityAnalysis(pkm);
+                        setEdited = true;
+                        if (correctionMessages.Count > 0 && la.Valid)
                         {
-                            legalizationHint = $"{spec} **cannot** be shiny. Please try again.";
-                        }
-
-                        if (!string.IsNullOrEmpty(legalizationHint))
-                        {
-                            embedBuilder.AddField("Hint", legalizationHint);
+                            var userName = Context.User.Mention;
+                            var changesEmbed = new EmbedBuilder()
+                                .WithTitle("Showdown Set Corrections")
+                                .WithColor(Color.Orange)
+                                .WithThumbnailUrl("https://raw.githubusercontent.com/bdawg1989/sprites/main/profoak.png")
+                                .WithDescription(string.Join("\n", correctionMessages))
+                                .AddField("Corrected Showdown Set:", $"```{finalShowdownSet}```")
+                                .Build();
+                            var correctionMessage = await ReplyAsync($"{userName}, here are the corrections we made to your Showdown set:", embed: changesEmbed).ConfigureAwait(false);
+                            _ = DeleteMessagesAfterDelayAsync(correctionMessage, Context.Message, 30);
                         }
                     }
 
-                    string userMention = Context.User.Mention;
-                    string messageContent = $"{userMention}, here's the report for your request:";
-                    var message = await Context.Channel.SendMessageAsync(text: messageContent, embed: embedBuilder.Build()).ConfigureAwait(false);
-                    _ = DeleteMessagesAfterDelayAsync(message, Context.Message, 30);
-                    return;
-                }
-
-                pk = correctedPk;
-            }
-
-            if (SysCord<T>.Runner.Config.Trade.TradeConfiguration.SuggestRelearnMoves)
-            {
-                if (pkm is PK9 pk9)
-                {
-                    pk9.SetRecordFlagsAll();
-                }
-                else if (pkm is PK8 pk8)
-                {
-                    pk8.SetRecordFlagsAll();
-                }
-                else if (pkm is PB8 pb8)
-                {
-                    pb8.SetRecordFlagsAll();
-                }
-                else if (pkm is PB7 pb7)
-                {
-                    // not applicable for PB7 (LGPE)
-                }
-                else if (pkm is PA8 pa8)
-                {
-                    // not applicable for PA8 (Legends: Arceus)
-                }
-            }
-
-            if (pkm is PA8)
-            {
-                pkm.HeldItem = (int)HeldItem.None; // Set to None for "Legends: Arceus" Pokémon
-            }
-            else if (pkm.HeldItem == 0 && !pkm.IsEgg)
-            {
-                pkm.HeldItem = (int)SysCord<T>.Runner.Config.Trade.TradeConfiguration.DefaultHeldItem;
-            }
-
-            if (pkm is PB7)
-            {
-                if (pkm.Species == (int)Species.Mew)
-                {
-                    if (pkm.IsShiny)
+                    if (pkm is not T correctedPk || !la.Valid)
                     {
-                        await ReplyAsync("Mew can **not** be Shiny in LGPE. PoGo Mew does not transfer and Pokeball Plus Mew is shiny locked.");
+                        var reason = result == "Timeout" ? $"That {spec} set took too long to generate." :
+                                     result == "VersionMismatch" ? "Request refused: PKHeX and Auto-Legality Mod version mismatch." :
+                                     $"I wasn't able to create a {spec} from that set.";
+
+                        var embedBuilder = new EmbedBuilder()
+                            .WithTitle("Trade Creation Failed.")
+                            .WithColor(Color.Red)
+                            .AddField("Status", $"Failed to create {spec}.")
+                            .AddField("Reason", reason);
+
+                        if (result == "Failed")
+                        {
+                            var legalizationHint = AutoLegalityWrapper.GetLegalizationHint(template, sav, pkm);
+                            if (legalizationHint.Contains("Requested shiny value (ShinyType."))
+                            {
+                                legalizationHint = $"{spec} **cannot** be shiny. Please try again.";
+                            }
+
+                            if (!string.IsNullOrEmpty(legalizationHint))
+                            {
+                                embedBuilder.AddField("Hint", legalizationHint);
+                            }
+                        }
+
+                        string userMention = Context.User.Mention;
+                        string messageContent = $"{userMention}, here's the report for your request:";
+                        var message = await Context.Channel.SendMessageAsync(text: messageContent, embed: embedBuilder.Build()).ConfigureAwait(false);
+                        _ = DeleteMessagesAfterDelayAsync(message, Context.Message, 30);
                         return;
                     }
-                }
-            }
-            if (pkm.WasEgg)
-                pkm.EggMetDate = pkm.MetDate;
-            pk.ResetPartyStats();
 
-            var userID = Context.User.Id;
-            var code = Info.GetRandomTradeCode(userID);
-            var lgcode = Info.GetRandomLGTradeCode();
-            if (pkm is PB7)
-            {
-                lgcode = TradeModule<T>.GenerateRandomPictocodes(3);
+                    pk = correctedPk;
+                }
+
+                if (SysCord<T>.Runner.Config.Trade.TradeConfiguration.SuggestRelearnMoves)
+                {
+                    if (pkm is PK9 pk9)
+                    {
+                        pk9.SetRecordFlagsAll();
+                    }
+                    else if (pkm is PK8 pk8)
+                    {
+                        pk8.SetRecordFlagsAll();
+                    }
+                    else if (pkm is PB8 pb8)
+                    {
+                        pb8.SetRecordFlagsAll();
+                    }
+                    else if (pkm is PB7 pb7)
+                    {
+                        // not applicable for PB7 (LGPE)
+                    }
+                    else if (pkm is PA8 pa8)
+                    {
+                        // not applicable for PA8 (Legends: Arceus)
+                    }
+                }
+
+                if (pkm is PA8)
+                {
+                    pkm.HeldItem = (int)HeldItem.None; // Set to None for "Legends: Arceus" Pokémon
+                }
+                else if (pkm.HeldItem == 0 && !pkm.IsEgg)
+                {
+                    pkm.HeldItem = (int)SysCord<T>.Runner.Config.Trade.TradeConfiguration.DefaultHeldItem;
+                }
+
+                if (pkm is PB7)
+                {
+                    if (pkm.Species == (int)Species.Mew)
+                    {
+                        if (pkm.IsShiny)
+                        {
+                            await ReplyAsync("Mew can **not** be Shiny in LGPE. PoGo Mew does not transfer and Pokeball Plus Mew is shiny locked.");
+                            return;
+                        }
+                    }
+                }
+                if (pkm.WasEgg)
+                    pkm.EggMetDate = pkm.MetDate;
+                pk.ResetPartyStats();
+
+                var userID = Context.User.Id;
+                var code = Info.GetRandomTradeCode(userID);
+                var lgcode = Info.GetRandomLGTradeCode();
+                if (pkm is PB7)
+                {
+                    lgcode = TradeModule<T>.GenerateRandomPictocodes(3);
+                }
+                var sig = Context.User.GetFavor();
+                await AddTradeToQueueAsync(batchTradeCode, Context.User.Username, pk, sig, Context.User, isBatchTrade, batchTradeNumber, totalBatchTrades, lgcode: lgcode, tradeType: PokeTradeType.Batch, ignoreAutoOT: ignoreAutoOT, setEdited: setEdited).ConfigureAwait(false);
             }
-            var sig = Context.User.GetFavor();
-            await AddTradeToQueueAsync(batchTradeCode, Context.User.Username, pk, sig, Context.User, isBatchTrade, batchTradeNumber, totalBatchTrades, lgcode: lgcode, tradeType: PokeTradeType.Batch, ignoreAutoOT: ignoreAutoOT, setEdited: setEdited).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            LogUtil.LogSafe(ex, nameof(TradeModule<T>));
-        }
+            catch (Exception ex)
+            {
+                LogUtil.LogSafe(ex, nameof(TradeModule<T>));
+            }
+        });
+
+        // Return immediately to avoid blocking
+        await Task.CompletedTask;
     }
 
     [Command("listevents")]
