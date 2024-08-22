@@ -1,8 +1,10 @@
 using Discord;
 using Discord.WebSocket;
 using PKHeX.Core;
+using PKHeX.Core.AutoMod;
 using SysBot.Base;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace SysBot.Pokemon.Discord;
@@ -23,9 +25,15 @@ public static class AutoLegalityExtensionsDiscord
             var pkm = sav.GetLegal(template, out var result);
             var la = new LegalityAnalysis(pkm);
             var spec = GameInfo.Strings.Species[template.Species];
+
             if (!la.Valid)
             {
-                var reason = result == "Timeout" ? $"That {spec} set took too long to generate." : result == "VersionMismatch" ? "Request refused: PKHeX and Auto-Legality Mod version mismatch." : $"I wasn't able to create a {spec} from that set.";
+                var reason = result switch
+                {
+                    "Timeout" => $"That {spec} set took too long to generate.",
+                    "VersionMismatch" => "Request refused: PKHeX and Auto-Legality Mod version mismatch.",
+                    _ => $"I wasn't able to create a {spec} from that set."
+                };
                 var imsg = $"Oops! {reason}";
                 if (result == "Failed")
                     imsg += $"\n{AutoLegalityWrapper.GetLegalizationHint(template, sav, pkm)}";
@@ -33,8 +41,30 @@ public static class AutoLegalityExtensionsDiscord
                 return;
             }
 
-            var msg = $"Here's your ({result}) legalized PKM for {spec} ({la.EncounterOriginal.Name})!";
-            await channel.SendPKMAsync(pkm, msg + $"\n{ReusableActions.GetFormattedShowdownText(pkm)}").ConfigureAwait(false);
+            // Create RegenTemplate from the legalized PKM
+            var regenTemplate = new RegenTemplate(pkm);
+            var regenText = regenTemplate.Text;
+
+            // Get form name using FormConverter
+            var formNames = FormConverter.GetFormList(pkm.Species, GameInfo.Strings.Types, GameInfo.Strings.forms, new List<string>(), pkm.Context);
+            var formName = pkm.Form > 0 && pkm.Form < formNames.Length ? formNames[pkm.Form] : "";
+
+            // Create species and form string
+            var speciesForm = !string.IsNullOrEmpty(formName) ? $"{spec}-{formName}" : spec;
+            var speciesInfo = $"{speciesForm}\n";
+
+            // Prepend species information to the RegenTemplate
+            regenText = speciesInfo + regenText;
+
+            // Create embed
+            var embed = new EmbedBuilder()
+                .WithTitle($"Legalized RegenTemplate for {speciesForm}")
+                .WithDescription($"Result: {result}\nEncounter: {la.EncounterOriginal.Name}")
+                .AddField("RegenTemplate", $"```{regenText}```")
+                .WithColor(Color.Green)
+                .WithFooter("Copy the RegenTemplate text between the ``` marks to use it.");
+
+            await channel.SendMessageAsync(embed: embed.Build()).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
