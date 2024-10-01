@@ -53,8 +53,17 @@ public class TimingSettings
     public int ExtraTimeLoadPortal { get; set; } = 1000;
 
     // Opening the game.
+    [Category(OpenGame), Description("Enable this if you need to select a profile when starting the game.")]
+    public bool ProfileSelectionRequired { get; set; } = true;
+
     [Category(OpenGame), Description("Extra time in milliseconds to wait for profiles to load when starting the game.")]
     public int ExtraTimeLoadProfile { get; set; }
+
+    [Category(OpenGame), Description("Enable this to add a delay for \"Checking if Game Can be Played\" Pop-up.")]
+    public bool CheckGameDelay { get; set; } = false;
+
+    [Category(OpenGame), Description("Extra Time to wait for the \"Checking if Game Can Be Played\" Pop-up.")]
+    public int ExtraTimeCheckGame { get; set; } = 200;
 
     // Raid-specific timings.
     [Category(Raid), Description("[RaidBot] Extra time in milliseconds to wait for the raid to load after clicking on the den.")]
