@@ -741,9 +741,22 @@ public class PokeTradeBotBS(PokeTradeHub<PB8> Hub, PokeBotState Config) : PokeRo
             tradeCodeStorage.UpdateTradeDetails(poke.Trainer.ID, ot, tid, sid);
         }
 
-        var partnerCheck = CheckPartnerReputation(this, poke, trainerNID, tradePartner.TrainerName, AbuseSettings, token);
+        var partnerCheck = await CheckPartnerReputation(this, poke, trainerNID, tradePartner.TrainerName, AbuseSettings, token);
         if (partnerCheck != PokeTradeResult.Success)
+        {
+            // Try to get out of the box.
+            if (!await ExitBoxToUnionRoom(token).ConfigureAwait(false))
+                return PokeTradeResult.RecoverReturnOverworld;
+
+            // Leave the Union room if we chose not to stay.
+            if (!distroRemainInRoom)
+            {
+                Log("Trying to get out of the Union Room.");
+                if (!await EnsureOutsideOfUnionRoom(token).ConfigureAwait(false))
+                    return PokeTradeResult.RecoverReturnOverworld;
+            }
             return PokeTradeResult.SuspiciousActivity;
+        }
 
         await Task.Delay(2_000, token).ConfigureAwait(false);
 
