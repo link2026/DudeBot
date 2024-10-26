@@ -660,7 +660,7 @@ namespace SysBot.Pokemon.Helpers
             {"Jet", 33},
             {"LAHeavy", 34},
             {"Leaden", 35},
-            {"Gigantic", 36},
+            {"Gigaton", 36},
             {"Origin", 37}
         };
 
