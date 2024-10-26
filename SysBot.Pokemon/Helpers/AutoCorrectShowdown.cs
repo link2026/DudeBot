@@ -131,11 +131,6 @@ public static class AutoCorrectShowdown<T> where T : PKM, new()
                     IVEVHelper<T>.RemoveEVLine(lines);
             }
 
-            if (lines.Any(line => line.StartsWith("Shiny:", StringComparison.OrdinalIgnoreCase)))
-            {
-                ShinyHelper<T>.VerifyShiny(pk, la, lines, correctionMessages, speciesName);
-            }
-
             string? markLine = null;
             List<string> markCorrectionMessages = new List<string>();
             if (autoCorrectConfig.AutoCorrectMarks && lines.Any(line => line.StartsWith(".RibbonMark")))
@@ -336,10 +331,7 @@ public static class AutoCorrectShowdown<T> where T : PKM, new()
         {
             return $"Ball: {correctedBallName}";
         }
-        else if (line.StartsWith("Shiny:", StringComparison.OrdinalIgnoreCase))
-        {
-            return la.EncounterMatch.Shiny.IsValid(la.Entity) ? "Shiny: Yes" : "Shiny: No";
-        }
+
         return line;
     }
 }
