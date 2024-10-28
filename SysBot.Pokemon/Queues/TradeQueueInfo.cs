@@ -207,6 +207,7 @@ public sealed record TradeQueueInfo<T>(PokeTradeHub<T> Hub)
             var priority = sudo ? PokeTradePriorities.Tier1 :
                            trade.Trade.IsFavored ? PokeTradePriorities.Tier2 :
                            PokeTradePriorities.TierFree;
+
             var queue = Hub.Queues.GetQueue(trade.Type);
 
             queue.Enqueue(trade.Trade, priority);
