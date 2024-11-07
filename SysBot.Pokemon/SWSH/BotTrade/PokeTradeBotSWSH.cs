@@ -470,7 +470,6 @@ public class PokeTradeBotSWSH(PokeTradeHub<PK8> hub, PokeBotState config) : Poke
 
                 // cleanup
                 Hub.Queues.CompleteTrade(this, poke);
-                CleanupAllBatchTradesFromQueue(poke);
                 _batchTracker.ClearReceivedPokemon(poke.Trainer.ID);
                 break;
             }
@@ -514,23 +513,67 @@ public class PokeTradeBotSWSH(PokeTradeHub<PK8> hub, PokeBotState config) : Poke
             else
                 result = await PerformLinkCodeTrade(sav, detail, token).ConfigureAwait(false);
 
-            if (result == PokeTradeResult.Success)
-                return;
+            if (detail.Type == PokeTradeType.Batch)
+            {
+                await HandleAbortedBatchTrade(detail, type, priority, result, token).ConfigureAwait(false);
+            }
+            else if (result != PokeTradeResult.Success)
+            {
+                HandleAbortedTrade(detail, type, priority, result);
+            }
         }
         catch (SocketException socket)
         {
             Log(socket.Message);
             result = PokeTradeResult.ExceptionConnection;
-            HandleAbortedTrade(detail, type, priority, result);
+            if (detail.Type == PokeTradeType.Batch)
+                await HandleAbortedBatchTrade(detail, type, priority, result, token).ConfigureAwait(false);
+            else
+                HandleAbortedTrade(detail, type, priority, result);
             throw;
         }
         catch (Exception e)
         {
             Log(e.Message);
             result = PokeTradeResult.ExceptionInternal;
+            if (detail.Type == PokeTradeType.Batch)
+                await HandleAbortedBatchTrade(detail, type, priority, result, token).ConfigureAwait(false);
+            else
+                HandleAbortedTrade(detail, type, priority, result);
         }
+    }
 
-        HandleAbortedTrade(detail, type, priority, result);
+    private async Task HandleAbortedBatchTrade(PokeTradeDetail<PK8> detail, PokeRoutineType type, uint priority, PokeTradeResult result, CancellationToken token)
+    {
+        detail.IsProcessing = false;
+
+        if (detail.TotalBatchTrades > 1)
+        {
+            if (result != PokeTradeResult.Success)
+            {
+                if (result.ShouldAttemptRetry() && detail.Type != PokeTradeType.Random && !detail.IsRetry)
+                {
+                    detail.IsRetry = true;
+                    hub.Queues.Enqueue(type, detail, Math.Min(priority, PokeTradePriorities.Tier2));
+                    detail.SendNotification(this, $"Oops! Something happened during batch trade {detail.BatchTradeNumber}/{detail.TotalBatchTrades}. I'll requeue you for another attempt.");
+                }
+                else
+                {
+                    detail.SendNotification(this, $"Trade {detail.BatchTradeNumber}/{detail.TotalBatchTrades} failed. Canceling remaining batch trades: {result}");
+                    CleanupAllBatchTradesFromQueue(detail);
+                    detail.TradeCanceled(this, result);
+                    await ExitTrade(false, token).ConfigureAwait(false);
+                }
+            }
+            else
+            {
+                CleanupAllBatchTradesFromQueue(detail);
+            }
+        }
+        else
+        {
+            HandleAbortedTrade(detail, type, priority, result);
+        }
     }
 
     private void HandleAbortedTrade(PokeTradeDetail<PK8> detail, PokeRoutineType type, uint priority, PokeTradeResult result)
