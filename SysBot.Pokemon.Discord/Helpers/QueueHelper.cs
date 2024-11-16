@@ -31,6 +31,17 @@ public static class QueueHelper<T> where T : PKM, new()
 
     private static readonly ConcurrentDictionary<ulong, int> ActiveBatchIds = new();
 
+    private static readonly Dictionary<int, string> MilestoneImages = new()
+    {
+        { 1, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/001.png" },
+        { 50, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/050.png" },
+        { 100, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/100.png" },
+        { 200, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/200.png" },
+        { 300, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/300.png" },
+        { 400, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/400.png" },
+        { 500, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/500.png" }
+    };
+
     private static int GetOrCreateBatchId(ulong userId, int batchTradeNumber)
     {
         if (batchTradeNumber == 1)
@@ -250,6 +261,13 @@ public static class QueueHelper<T> where T : PKM, new()
         {
             await HandleDiscordExceptionAsync(context, trader, ex);
             return new TradeQueueResult(false);
+        }
+
+        if (SysCord<T>.Runner.Hub.Config.Trade.TradeConfiguration.StoreTradeCodes)
+        {
+            var tradeCodeStorage = new TradeCodeStorage();
+            int tradeCount = tradeCodeStorage.GetTradeCount(trader.Id);
+            _ = SendMilestoneEmbed(tradeCount, context.Channel, trader);
         }
 
         return new TradeQueueResult(true);
@@ -567,21 +585,19 @@ public static class QueueHelper<T> where T : PKM, new()
         }
     }
 
-    public enum AlcremieDecoration
+    private static async Task SendMilestoneEmbed(int tradeCount, ISocketMessageChannel channel, SocketUser user)
     {
-        Strawberry = 0,
+        if (MilestoneImages.TryGetValue(tradeCount, out string? imageUrl))
+        {
+            var embed = new EmbedBuilder()
+                .WithTitle($"🎉 Congratulations, {user.Username}! 🎉")
+                .WithDescription($"You've completed {tradeCount} trades!\n*Keep up the great work!*")
+                .WithColor(new DiscordColor(255, 215, 0)) // Gold color
+                .WithImageUrl(imageUrl)
+                .Build();
 
-        Berry = 1,
-
-        Love = 2,
-
-        Star = 3,
-
-        Clover = 4,
-
-        Flower = 5,
-
-        Ribbon = 6,
+            await channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
+        }
     }
 
     public static async Task<(int R, int G, int B)> GetDominantColorAsync(string imagePath)
