@@ -1201,6 +1201,7 @@ public class PokeTradeBotBS : PokeRoutineExecutor8BS, ICountBot, ITradeBot, IDis
                 poke.SendNotification(this, $"Trade {completedTrades} completed! Preparing your next Pokémon ({nextDetail.BatchTradeNumber}/{nextDetail.TotalBatchTrades}). Please wait in the trade screen!");
                 poke = nextDetail;
 
+                await Task.Delay(10_000, token).ConfigureAwait(false); // Add delay for trade animation/pokedex register
                 await Click(A, 1_000, token).ConfigureAwait(false);
                 if (poke.TradeData.Species != 0)
                 {
@@ -1228,13 +1229,12 @@ public class PokeTradeBotBS : PokeRoutineExecutor8BS, ICountBot, ITradeBot, IDis
             else
                 result = await PerformLinkCodeTrade(sav, detail, token).ConfigureAwait(false);
 
-            if (detail.Type == PokeTradeType.Batch)
+            if (result != PokeTradeResult.Success)
             {
-                await HandleAbortedBatchTrade(detail, type, priority, result, token).ConfigureAwait(false);
-            }
-            else if (result != PokeTradeResult.Success)
-            {
-                HandleAbortedTrade(detail, type, priority, result);
+                if (detail.Type == PokeTradeType.Batch)
+                    await HandleAbortedBatchTrade(detail, type, priority, result, token).ConfigureAwait(false);
+                else
+                    HandleAbortedTrade(detail, type, priority, result);
             }
         }
         catch (SocketException socket)
