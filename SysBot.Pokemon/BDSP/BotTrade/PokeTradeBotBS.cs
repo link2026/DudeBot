@@ -1317,10 +1317,10 @@ public class PokeTradeBotBS : PokeRoutineExecutor8BS, ICountBot, ITradeBot, IDis
 
             // If we detected a change, they offered something.
             var pk = await ReadPokemon(LinkTradePokemonOffset, BoxFormatSlotSize, token).ConfigureAwait(false);
-            var newEC = await SwitchConnection.ReadBytesAbsoluteAsync(LinkTradePokemonOffset, 8, token).ConfigureAwait(false);
-            if (pk.Species < 1 || !pk.ChecksumValid || lastOffered.SequenceEqual(newEC))
+            var newECchk = await SwitchConnection.ReadBytesAbsoluteAsync(LinkTradePokemonOffset, 8, token).ConfigureAwait(false);
+            if (pk.Species == 0 || !pk.ChecksumValid || lastOffered.SequenceEqual(newECchk))
                 continue;
-            lastOffered = newEC;
+            lastOffered = newECchk;
 
             // Send results from separate thread; the bot doesn't need to wait for things to be calculated.
             if (DumpSetting.Dump)
