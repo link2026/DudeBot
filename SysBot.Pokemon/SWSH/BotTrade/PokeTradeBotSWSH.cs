@@ -358,16 +358,18 @@ public class PokeTradeBotSWSH(PokeTradeHub<PK8> hub, PokeBotState config) : Poke
 
             // Rest of the trading logic remains the same
             poke.TradeSearching(this);
-            var partnerFound = await WaitForTradePartnerOffer(token).ConfigureAwait(false);
-
-            if (!partnerFound)
+            if (completedTrades == 0)
             {
-                if (completedTrades > 0)
-                    poke.SendNotification(this, $"No trainer found after trade {completedTrades + 1}/{startingDetail.TotalBatchTrades}. Canceling the remaining trades.");
-                await ExitTrade(false, token).ConfigureAwait(false);
-                return PokeTradeResult.NoTrainerFound;
+                var partnerFound = await WaitForTradePartnerOffer(token).ConfigureAwait(false);
+                if (!partnerFound)
+                {
+                    poke.IsProcessing = false;
+                    if (startingDetail.TotalBatchTrades > 1)
+                        poke.SendNotification(this, $"No trainer found after trade {completedTrades + 1}/{startingDetail.TotalBatchTrades}. Canceling the remaining trades.");
+                    await ResetTradePosition(token).ConfigureAwait(false);
+                    return PokeTradeResult.NoTrainerFound;
+                }
             }
-
             await Task.Delay(5_500 + hub.Config.Timings.MiscellaneousSettings.ExtraTimeOpenBox, token).ConfigureAwait(false);
 
             var trainerName = await GetTradePartnerName(TradeMethod.LinkTrade, token).ConfigureAwait(false);
