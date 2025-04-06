@@ -20,7 +20,7 @@ public class InfoModule : ModuleBase<SocketCommandContext>
 
     private const ulong DisallowedUserId = 195756980873199618;
 
-    private const string repo = "https://github.com/bdawg1989/MergeBot";
+    private const string repo = "https://github.com/link2026/MergeBot";
 
     [Command("info")]
     [Alias("about", "whoami", "owner")]
@@ -40,14 +40,16 @@ public class InfoModule : ModuleBase<SocketCommandContext>
         };
 
         builder.AddField("Info",
-            $"- [Source Code]({repo})\n- [Join Our Discord!](https://notpaldea.net)\n" +
+            $"- {Format.Bold("Original Source")}: [SysBot.NET](https://github.com/kwsch/SysBot.NET))\n" +
+            $"- {Format.Bold("Forked Source")}: [MergeBot](https://github.com/bdawg1989/SysBot)\n" +
+            $"- [DudeBot Source Code]({repo})\n- [Join Our Discord!](https://chinchou.net)\n" +
             $"- {Format.Bold("Owner")}: {app.Owner} ({app.Owner.Id})\n" +
             $"- {Format.Bold("Library")}: Discord.Net ({DiscordConfig.Version})\n" +
             $"- {Format.Bold("Uptime")}: {GetUptime()}\n" +
             $"- {Format.Bold("Runtime")}: {RuntimeInformation.FrameworkDescription} {RuntimeInformation.ProcessArchitecture} " +
             $"({RuntimeInformation.OSDescription} {RuntimeInformation.OSArchitecture})\n" +
             $"- {Format.Bold("Buildtime")}: {GetVersionInfo("SysBot.Base", false)}\n" +
-            $"- {Format.Bold("Mergebot Version")}: {TradeBot.Version}\n" +
+            $"- {Format.Bold("DudeBot Version")}: {TradeBot.Version}\n" +
             $"- {Format.Bold("Core Version")}: {GetVersionInfo("PKHeX.Core")}\n" +
             $"- {Format.Bold("AutoLegality Version")}: {GetVersionInfo("PKHeX.Core.AutoMod")}\n"
         );

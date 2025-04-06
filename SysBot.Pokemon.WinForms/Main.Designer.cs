@@ -330,7 +330,7 @@ namespace SysBot.Pokemon.WinForms
             Name = "Main";
             SizeGripStyle = SizeGripStyle.Show;
             StartPosition = FormStartPosition.CenterScreen;
-            Text = "NotPaldea.net";
+            Text = "Chinchou.net";
             FormClosing += Main_FormClosing;
             TC_Main.ResumeLayout(false);
             Tab_Bots.ResumeLayout(false);

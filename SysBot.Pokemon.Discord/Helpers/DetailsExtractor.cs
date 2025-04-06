@@ -49,7 +49,7 @@ public static class DetailsExtractor<T> where T : PKM, new()
     {
         if (isCloneRequest || isSpecialRequest)
         {
-            embedBuilder.WithThumbnailUrl("https://raw.githubusercontent.com/bdawg1989/sprites/main/profoak.png");
+            embedBuilder.WithThumbnailUrl("https://raw.githubusercontent.com/Havokx89/sprites/main/profoak.png");
         }
         else if (!string.IsNullOrEmpty(heldItemUrl))
         {

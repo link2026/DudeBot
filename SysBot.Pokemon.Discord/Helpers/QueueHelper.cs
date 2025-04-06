@@ -33,21 +33,21 @@ public static class QueueHelper<T> where T : PKM, new()
 
     private static readonly Dictionary<int, string> MilestoneImages = new()
     {
-        { 1, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/001.png" },
-        { 50, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/050.png" },
-        { 100, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/100.png" },
-        { 150, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/150.png" },
-        { 200, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/200.png" },
-        { 250, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/250.png" },
-        { 300, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/300.png" },
-        { 350, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/350.png" },
-        { 400, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/400.png" },
-        { 450, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/450.png" },
-        { 500, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/500.png" },
-        { 550, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/550.png" },
-        { 600, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/600.png" },
-        { 650, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/650.png" },
-        { 700, "https://raw.githubusercontent.com/Secludedly/ZE-FusionBot-Sprite-Images/main/700.png" }
+        { 1, "https://raw.githubusercontent.com/Havokx89/ZE-FusionBot-Sprite-Images/main/001.png" },
+        { 50, "https://raw.githubusercontent.com/Havokx89/ZE-FusionBot-Sprite-Images/main/050.png" },
+        { 100, "https://raw.githubusercontent.com/Havokx89/ZE-FusionBot-Sprite-Images/main/100.png" },
+        { 150, "https://raw.githubusercontent.com/Havokx89/ZE-FusionBot-Sprite-Images/main/150.png" },
+        { 200, "https://raw.githubusercontent.com/Havokx89/ZE-FusionBot-Sprite-Images/main/200.png" },
+        { 250, "https://raw.githubusercontent.com/Havokx89/ZE-FusionBot-Sprite-Images/main/250.png" },
+        { 300, "https://raw.githubusercontent.com/Havokx89/ZE-FusionBot-Sprite-Images/main/300.png" },
+        { 350, "https://raw.githubusercontent.com/Havokx89/ZE-FusionBot-Sprite-Images/main/350.png" },
+        { 400, "https://raw.githubusercontent.com/Havokx89/ZE-FusionBot-Sprite-Images/main/400.png" },
+        { 450, "https://raw.githubusercontent.com/Havokx89/ZE-FusionBot-Sprite-Images/main/450.png" },
+        { 500, "https://raw.githubusercontent.com/Havokx89/ZE-FusionBot-Sprite-Images/main/500.png" },
+        { 550, "https://raw.githubusercontent.com/Havokx89/ZE-FusionBot-Sprite-Images/main/550.png" },
+        { 600, "https://raw.githubusercontent.com/Havokx89/ZE-FusionBot-Sprite-Images/main/600.png" },
+        { 650, "https://raw.githubusercontent.com/Havokx89/ZE-FusionBot-Sprite-Images/main/650.png" },
+        { 700, "https://raw.githubusercontent.com/Havokx89/ZE-FusionBot-Sprite-Images/main/700.png" }
     };
 
     private static string GetMilestoneDescription(int tradeCount)
@@ -166,11 +166,11 @@ public static class QueueHelper<T> where T : PKM, new()
             (string embedImageUrl, DiscordColor embedColor) = await PrepareEmbedDetails(pk);
 
             embedData.EmbedImageUrl = isMysteryMon ? "https://i.imgur.com/FdESYAv.png" :
-                                      isMysteryEgg ? "https://raw.githubusercontent.com/bdawg1989/sprites/main/mysteryegg3.png" :
-                                       type == PokeRoutineType.Dump ? "https://raw.githubusercontent.com/bdawg1989/sprites/main/AltBallImg/128x128/dumpball.png" :
-                                       type == PokeRoutineType.Clone ? "https://raw.githubusercontent.com/bdawg1989/sprites/main/clonepod.png" :
-                                       type == PokeRoutineType.SeedCheck ? "https://raw.githubusercontent.com/bdawg1989/sprites/main/specialrequest.png" :
-                                       type == PokeRoutineType.FixOT ? "https://raw.githubusercontent.com/bdawg1989/sprites/main/AltBallImg/128x128/rocketball.png" :
+                                      isMysteryEgg ? "https://raw.githubusercontent.com/Havokx89/sprites/main/mysteryegg3.png" :
+                                       type == PokeRoutineType.Dump ? "https://raw.githubusercontent.com/Havokx89/sprites/main/AltBallImg/128x128/dumpball.png" :
+                                       type == PokeRoutineType.Clone ? "https://raw.githubusercontent.com/Havokx89/sprites/main/clonepod.png" :
+                                       type == PokeRoutineType.SeedCheck ? "https://raw.githubusercontent.com/Havokx89/sprites/main/specialrequest.png" :
+                                       type == PokeRoutineType.FixOT ? "https://raw.githubusercontent.com/Havokx89/sprites/main/AltBallImg/128x128/rocketball.png" :
                                        embedImageUrl;
 
             embedData.HeldItemUrl = string.Empty;
@@ -202,7 +202,7 @@ public static class QueueHelper<T> where T : PKM, new()
                 .WithAuthor(new EmbedAuthorBuilder()
                     .WithName(embedData.AuthorName)
                     .WithIconUrl(trader.GetAvatarUrl() ?? trader.GetDefaultAvatarUrl())
-                    .WithUrl("https://genpkm.com"));
+                    .WithUrl("https://chinchou.net"));
 
             DetailsExtractor<T>.AddAdditionalText(embedBuilder);
 
@@ -217,7 +217,7 @@ public static class QueueHelper<T> where T : PKM, new()
 
             if (setEdited && Info.Hub.Config.Trade.AutoCorrectConfig.AutoCorrectEmbedIndicator)
             {
-                embedBuilder.Footer.IconUrl = "https://raw.githubusercontent.com/bdawg1989/sprites/main/setedited.png";
+                embedBuilder.Footer.IconUrl = "https://raw.githubusercontent.com/Havokx89/sprites/main/setedited.png";
                 embedBuilder.AddField("**__Notice__**: **Your Showdown Set was Invalid.**", "*Auto Corrected to make legal.*");
             }
             // Check if the Pokemon is Non-Native and/or has a Home Tracker
@@ -226,26 +226,26 @@ public static class QueueHelper<T> where T : PKM, new()
                 if (homeTrack.HasTracker && isNonNative)
                 {
                     // Both Non-Native and has Home Tracker
-                    embedBuilder.Footer.IconUrl = "https://raw.githubusercontent.com/bdawg1989/sprites/main/exclamation.gif";
+                    embedBuilder.Footer.IconUrl = "https://raw.githubusercontent.com/Havokx89/sprites/main/exclamation.gif";
                     embedBuilder.AddField("**__Notice__**: **This Pokemon is Non-Native & Has Home Tracker.**", "*AutoOT not applied.*");
                 }
                 else if (homeTrack.HasTracker)
                 {
                     // Only has Home Tracker
-                    embedBuilder.Footer.IconUrl = "https://raw.githubusercontent.com/bdawg1989/sprites/main/exclamation.gif";
+                    embedBuilder.Footer.IconUrl = "https://raw.githubusercontent.com/Havokx89/sprites/main/exclamation.gif";
                     embedBuilder.AddField("**__Notice__**: **Home Tracker Detected.**", "*AutoOT not applied.*");
                 }
                 else if (isNonNative)
                 {
                     // Only Non-Native
-                    embedBuilder.Footer.IconUrl = "https://raw.githubusercontent.com/bdawg1989/sprites/main/exclamation.gif";
+                    embedBuilder.Footer.IconUrl = "https://raw.githubusercontent.com/Havokx89/sprites/main/exclamation.gif";
                     embedBuilder.AddField("**__Notice__**: **This Pokemon is Non-Native.**", "*Cannot enter HOME & AutoOT not applied.*");
                 }
             }
             else if (isNonNative)
             {
                 // Fallback for Non-Native Pokemon that don't implement IHomeTrack
-                embedBuilder.Footer.IconUrl = "https://raw.githubusercontent.com/bdawg1989/sprites/main/exclamation.gif";
+                embedBuilder.Footer.IconUrl = "https://raw.githubusercontent.com/Havokx89/sprites/main/exclamation.gif";
                 embedBuilder.AddField("**__Notice__**: **This Pokemon is Non-Native.**", "*Cannot enter HOME & AutoOT not applied.*");
             }
             DetailsExtractor<T>.AddThumbnails(embedBuilder, type == PokeRoutineType.Clone, type == PokeRoutineType.SeedCheck, embedData.HeldItemUrl);
@@ -347,7 +347,7 @@ public static class QueueHelper<T> where T : PKM, new()
 
         if (pk.IsEgg)
         {
-            const string eggImageUrl = "https://raw.githubusercontent.com/bdawg1989/sprites/main/egg.png";
+            const string eggImageUrl = "https://raw.githubusercontent.com/Havokx89/sprites/main/egg.png";
             speciesImageUrl = TradeExtensions<T>.PokeImg(pk, false, true, null);
             System.Drawing.Image combinedImage = await OverlaySpeciesOnEgg(eggImageUrl, speciesImageUrl);
             embedImageUrl = SaveImageLocally(combinedImage);
@@ -370,7 +370,7 @@ public static class QueueHelper<T> where T : PKM, new()
             ballName = ballName.Replace(" ", "").ToLower();
         }
 
-        string ballImgUrl = $"https://raw.githubusercontent.com/bdawg1989/sprites/main/AltBallImg/20x20/{ballName}.png";
+        string ballImgUrl = $"https://raw.githubusercontent.com/Havokx89/sprites/main/AltBallImg/20x20/{ballName}.png";
 
         // Check if embedImageUrl is a local file or a web URL
         if (Uri.TryCreate(embedImageUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeFile)

@@ -10,7 +10,7 @@ public class LegalitySettings
 
     private const string Misc = nameof(Misc);
 
-    private string DefaultTrainerName = "genpkm.com";
+    private string DefaultTrainerName = "chinchou.net";
 
     [Category(Generate), Description("Allow users to submit further customization with Batch Editor commands.")]
     public bool AllowBatchCommands { get; set; } = true;
