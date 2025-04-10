@@ -202,7 +202,7 @@ public static class QueueHelper<T> where T : PKM, new()
                 .WithAuthor(new EmbedAuthorBuilder()
                     .WithName(embedData.AuthorName)
                     .WithIconUrl(trader.GetAvatarUrl() ?? trader.GetDefaultAvatarUrl())
-                    .WithUrl("https://chinchou.net"));
+                    .WithUrl("https://media.discordapp.net/attachments/811400394839687228/1358874332746743879/fckdevry.png?ex=67f56dd7&is=67f41c57&hm=7c1bf670ae5844cb8dcc2a4339bea507074c2691aea4a3962e805c794855f4c3&=&format=webp&quality=lossless"));
 
             DetailsExtractor<T>.AddAdditionalText(embedBuilder);
 
